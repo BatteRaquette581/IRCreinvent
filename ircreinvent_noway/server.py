@@ -1,18 +1,22 @@
 import socket
 import threading
-def handle_conn(conn,addr):
+
+def handle_connection(connection, address):
+    BUF = 1024
     while True:
-        msg = conn.recv(1024).decode()
+        msg = connection.recv(BUF).decode()
         if not msg:
             continue
-        conn.send((str(addr)+": "+msg).encode())
-s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        connection.send(f"{str(address)}: {msg}").encode()
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 port = input("Server Port: ")
-s.bind(("127.0.0.1",int(port)))
-s.listen()
+sock.bind(("127.0.0.1", int(port)))
+sock.listen()
 while True:
-    conn, addr = s.accept()
-    threading.Thread(target=handle_conn,args=(conn,addr),daemon=True).start()
-
-
-
+    connection, address = sock.accept()
+    threading.Thread(
+        target = handle_connection,
+        args = (connection, address),
+        daemon = True
+    ).start()
