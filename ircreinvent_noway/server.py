@@ -1,7 +1,7 @@
 import socket
 import threading
 
-def handle_connection(connection, address,members_socks):
+def handle_connection(connection, address, members_socks):
     BUF = 1024
     while True:
         msg = connection.recv(BUF).decode()
@@ -23,10 +23,10 @@ members_socks = []
 members = {}
 while True:
     connection, address = sock.accept()
-    members_socks.append( connection)
+    members_socks.append(connection)
 
     threading.Thread(
         target = handle_connection,
-        args = (connection, address,members_socks),
+        args = (connection, address, members_socks),
         daemon = True
     ).start()
