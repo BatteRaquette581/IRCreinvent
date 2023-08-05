@@ -1,7 +1,8 @@
 import collections
 import socket
 import threading
-from typing import Optional
+import time
+
 
 
 class ChatRoom:
@@ -21,11 +22,7 @@ class ChatRoom:
     def read_all_messages(self):
         return [message for message in self.messages]
 
-    def change_name(self, name: str):
-        self.name = name
-
-    def get_name(self):
-        return self.name
+    
 
 
 class Member:
@@ -42,6 +39,7 @@ def handle_connection_read(member: Member):
     while member.connected:
         if latest_message == previous_message:
             latest_message = member.chatroom.read_newest_message()
+            time.sleep(0.1)
             continue
         member.connection.sendall(latest_message.encode())
         previous_message = latest_message
@@ -73,7 +71,7 @@ def exit(member: Member):
 def join(member: Member, chatroom_name: str):
     chatroom = list(filter(lambda chatroom: chatroom.name == chatroom_name, chatrooms))
     if not chatroom:
-        rooms(member, "")
+        rooms(member)
         return
     member.chatroom = chatroom[0]
     member.connection.send("\n".join(member.chatroom.read_all_messages()).encode())
@@ -81,6 +79,7 @@ def join(member: Member, chatroom_name: str):
 
 def croom(member: Member, name: str, public: str, inherit: str = None):
     chatroom = ChatRoom(name, True if public == "True" else False)
+
     if inherit:
         parent = tuple(filter(lambda chatroom: chatroom.name == inherit, chatrooms))
         if not parent:
