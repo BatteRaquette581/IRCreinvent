@@ -4,14 +4,13 @@ import threading
 import time
 
 
-
 class ChatRoom:
-    def __init__(self, name: str, public: bool, allowed_ips : list[str] = None):
+    def __init__(self, name: str, public: bool, allowed_ips: list[str] = None):
         self.name = name
         self.public = public
         self.messages = collections.deque()
         self.messages.append(f"This is start of {self.name} chatroom\n")
-        self.allowed_ips = allowed_ips
+        if not public: self.allowed_ips = allowed_ips
 
     def add_message(self, message: str):
         self.messages.append(message)
@@ -22,16 +21,16 @@ class ChatRoom:
     def read_all_messages(self):
         return [message for message in self.messages]
 
-    
-
 
 class Member:
-    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom, connected : bool =True):
+    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom,
+                 connected: bool = True):
         self.username = username
         self.address = address
         self.connection = connection
         self.chatroom = chatroom
         self.connected = connected
+
 
 def handle_connection_read(member: Member):
     latest_message = ""
@@ -52,8 +51,11 @@ def commands(member: Member):
                                                                   not element.startswith(
                                                                       "handle_connection")]))).encode())
 
+
 def users(member: Member):
-    member.connection.send((("Users in this chatroom:\n")+"\n".join([user.username for user in members if user.chatroom == member.chatroom])).encode())
+    member.connection.send((("Users in this chatroom:\n") + "\n".join(
+        [user.username for user in members if user.chatroom == member.chatroom])).encode())
+
 
 def rooms(member: Member):
     member.connection.send((("Available Chatrooms:\n") + "\n".join(
@@ -73,12 +75,23 @@ def join(member: Member, chatroom_name: str):
     if not chatroom:
         rooms(member)
         return
+    if not chatroom[0].public:
+        if member.address[0] not in chatroom[0].allowed_ips:
+            member.connection.send("Access Denied".encode())
+            return
     member.chatroom = chatroom[0]
     member.connection.send("\n".join(member.chatroom.read_all_messages()).encode())
 
 
 def croom(member: Member, name: str, public: str, inherit: str = None):
-    chatroom = ChatRoom(name, True if public == "True" else False)
+    public = True if public == "True" else False
+    allowed_members = None
+    if not public:
+        member.connection.send("Please list what members are allowed to join (separated by whitespaces):\n".encode())
+        allowed_members = [user.address[0] for user in members if
+                           user.username in member.connection.recv(1024).decode().split(" ")]
+
+    chatroom = ChatRoom(name, public, allowed_members)
 
     if inherit:
         parent = tuple(filter(lambda chatroom: chatroom.name == inherit, chatrooms))
