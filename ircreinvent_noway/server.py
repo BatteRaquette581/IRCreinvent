@@ -90,7 +90,6 @@ def croom(member: Member, name: str, public: str, inherit: str = None):
 
 
 def delroom(member: Member, name: str):
-    name = message[1]
     if name == "Public":
         member.connection.send("No you can't delete Public".encode())
         return
