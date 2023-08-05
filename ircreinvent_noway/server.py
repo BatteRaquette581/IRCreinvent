@@ -58,6 +58,8 @@ def rooms(member: Member):
     member.connection.send((("Available Chatrooms:\n") + "\n".join(
         [c.name for c in list(filter(lambda chatroom: chatroom.public, chatrooms))])).encode())
 
+def users(member: Member):
+    member.connection.send((("Users in this chatroom:\n")+"\n".join([user.username for user in members if user.chatroom == member.chatroom])).encode())
 
 def exit(member: Member):
     member.chatroom.add_message(f"System: {member.username} has left the chat\n")
