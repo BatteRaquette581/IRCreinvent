@@ -5,11 +5,12 @@ from typing import Optional
 
 
 class ChatRoom:
-    def __init__(self, name: str, public: bool):
+    def __init__(self, name: str, public: bool, allowed_ips : list[str] = None):
         self.name = name
         self.public = public
         self.messages = collections.deque()
         self.messages.append(f"This is start of {self.name} chatroom\n")
+        self.allowed_ips = allowed_ips
 
     def add_message(self, message: str):
         self.messages.append(message)
@@ -28,17 +29,17 @@ class ChatRoom:
 
 
 class Member:
-    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom):
+    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom, connected : bool =True):
         self.username = username
         self.address = address
         self.connection = connection
         self.chatroom = chatroom
-
+        self.connected = connected
 
 def handle_connection_read(member: Member):
     latest_message = ""
     previous_message = ""
-    while True:
+    while member.connected:
         if latest_message == previous_message:
             latest_message = member.chatroom.read_newest_message()
             continue
@@ -53,16 +54,17 @@ def commands(member: Member):
                                                                   not element.startswith(
                                                                       "handle_connection")]))).encode())
 
+def users(member: Member):
+    member.connection.send((("Users in this chatroom:\n")+"\n".join([user.username for user in members if user.chatroom == member.chatroom])).encode())
 
 def rooms(member: Member):
     member.connection.send((("Available Chatrooms:\n") + "\n".join(
         [c.name for c in list(filter(lambda chatroom: chatroom.public, chatrooms))])).encode())
 
-def users(member: Member):
-    member.connection.send((("Users in this chatroom:\n")+"\n".join([user.username for user in members if user.chatroom == member.chatroom])).encode())
 
 def exit(member: Member):
     member.chatroom.add_message(f"System: {member.username} has left the chat\n")
+    member.connected = False
     member.connection.shutdown(2)
     member.connection.close()
     members.remove(member)
@@ -104,7 +106,7 @@ def delroom(member: Member, name: str):
 
 
 def handle_connection_write(member: Member):
-    while True:
+    while member.connected:
         message = member.connection.recv(1024).decode()
         if not message: continue
         if message.startswith("!"):
@@ -114,6 +116,8 @@ def handle_connection_write(member: Member):
 
             except KeyError:
                 member.connection.send("Command not found".encode())
+            except TypeError:
+                member.connection.send("Not enough parameters".encode())
 
             continue
         member.chatroom.add_message(f"{member.username}: {message}")
