@@ -5,12 +5,12 @@ import time
 
 
 class ChatRoom:
-    def __init__(self, name: str, public: bool, allowed_ips: list[str] = None):
+    def __init__(self, name: str, public: bool, *members: list[str]):
         self.name = name
         self.public = public
         self.messages = collections.deque()
         self.messages.append(f"This is start of {self.name} chatroom\n")
-        if not public: self.allowed_ips = allowed_ips
+        self.members = members
 
     def add_message(self, message: str):
         self.messages.append(message)
@@ -93,7 +93,7 @@ def croom(member: Member, name: str, public: str, inherit: str = None):
 
     chatroom = ChatRoom(name, public, allowed_members)
 
-    if inherit:
+    if inherit != "_":
         parent = tuple(filter(lambda chatroom: chatroom.name == inherit, chatrooms))
         if not parent:
             member.connection.send("Parent chatroom not found".encode())
@@ -106,6 +106,7 @@ def croom(member: Member, name: str, public: str, inherit: str = None):
 
 
 def delroom(member: Member, name: str):
+    name = message[1]
     if name == "Public":
         member.connection.send("No you can't delete Public".encode())
         return
