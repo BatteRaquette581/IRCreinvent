@@ -1,7 +1,8 @@
 import collections
 import socket
 import threading
-from typing import Optional
+import time
+
 
 
 class ChatRoom:
@@ -21,27 +22,24 @@ class ChatRoom:
     def read_all_messages(self):
         return [message for message in self.messages]
 
-    def change_name(self, name: str):
-        self.name = name
-
-    def get_name(self):
-        return self.name
+    
 
 
 class Member:
-    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom):
+    def __init__(self, username: str, address: tuple, connection: socket.socket, chatroom: ChatRoom, connected : bool =True):
         self.username = username
         self.address = address
         self.connection = connection
         self.chatroom = chatroom
-
+        self.connected = connected
 
 def handle_connection_read(member: Member):
     latest_message = ""
     previous_message = ""
-    while True:
+    while member.connected:
         if latest_message == previous_message:
             latest_message = member.chatroom.read_newest_message()
+            time.sleep(0.1)
             continue
         member.connection.sendall(latest_message.encode())
         previous_message = latest_message
@@ -54,6 +52,8 @@ def commands(member: Member):
                                                                   not element.startswith(
                                                                       "handle_connection")]))).encode())
 
+def users(member: Member):
+    member.connection.send((("Users in this chatroom:\n")+"\n".join([user.username for user in members if user.chatroom == member.chatroom])).encode())
 
 def rooms(member: Member):
     member.connection.send((("Available Chatrooms:\n") + "\n".join(
@@ -62,6 +62,7 @@ def rooms(member: Member):
 
 def exit(member: Member):
     member.chatroom.add_message(f"System: {member.username} has left the chat\n")
+    member.connected = False
     member.connection.shutdown(2)
     member.connection.close()
     members.remove(member)
@@ -70,7 +71,7 @@ def exit(member: Member):
 def join(member: Member, chatroom_name: str):
     chatroom = list(filter(lambda chatroom: chatroom.name == chatroom_name, chatrooms))
     if not chatroom:
-        rooms(member, "")
+        rooms(member)
         return
     member.chatroom = chatroom[0]
     member.connection.send("\n".join(member.chatroom.read_all_messages()).encode())
@@ -104,7 +105,7 @@ def delroom(member: Member, name: str):
 
 
 def handle_connection_write(member: Member):
-    while True:
+    while member.connected:
         message = member.connection.recv(1024).decode()
         if not message: continue
         if message.startswith("!"):
@@ -114,6 +115,8 @@ def handle_connection_write(member: Member):
 
             except KeyError:
                 member.connection.send("Command not found".encode())
+            except TypeError:
+                member.connection.send("Not enough parameters".encode())
 
             continue
         member.chatroom.add_message(f"{member.username}: {message}")
