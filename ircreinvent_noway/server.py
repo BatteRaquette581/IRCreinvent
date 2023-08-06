@@ -6,12 +6,12 @@ import time
 
 
 class ChatRoom:
-    def __init__(self, name: str, public: bool, allowed_ips : list[str] = None):
+    def __init__(self, name: str, public: bool, *members: list[str]):
         self.name = name
         self.public = public
         self.messages = collections.deque()
         self.messages.append(f"This is start of {self.name} chatroom\n")
-        self.allowed_ips = allowed_ips
+        self.members = members
 
     def add_message(self, message: str):
         self.messages.append(message)
@@ -77,10 +77,9 @@ def join(member: Member, chatroom_name: str):
     member.connection.send("\n".join(member.chatroom.read_all_messages()).encode())
 
 
-def croom(member: Member, name: str, public: str, inherit: str = None):
-    chatroom = ChatRoom(name, True if public == "True" else False)
-
-    if inherit:
+def croom(member: Member, name: str, public: str, inherit: str = None, *members: list[str]):
+    chatroom = ChatRoom(name, True if public == "True" else False, members)
+    if inherit != "_":
         parent = tuple(filter(lambda chatroom: chatroom.name == inherit, chatrooms))
         if not parent:
             member.connection.send("Parent chatroom not found".encode())
@@ -93,6 +92,7 @@ def croom(member: Member, name: str, public: str, inherit: str = None):
 
 
 def delroom(member: Member, name: str):
+    name = message[1]
     if name == "Public":
         member.connection.send("No you can't delete Public".encode())
         return
