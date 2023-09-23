@@ -1,6 +1,6 @@
 0.3 Update
 - (Important) Revive the project
-- (Server) ARS Encryption per each member
+- (Server) RSA Encryption per each member
 - (Server) Remake the handle_connection_read function
 - (Client) (Optional) Make colored text support (ANSI Escape Codes / Custom notation)
 - (Client) (Long Term Development) Make client more customizable (custom themes)
