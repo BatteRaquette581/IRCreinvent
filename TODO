@@ -5,5 +5,6 @@
 - (Client) (Optional) Make colored text support (ANSI Escape Codes / Custom notation)
 - (Client) (Long Term Development) Make client more customizable (custom themes)
 - (Server) (Optional) Make server auto-enable ngrok tunnel if specified
+- (Server) Add help/documentation for commands 
 
 
