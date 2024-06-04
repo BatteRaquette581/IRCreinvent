@@ -4,6 +4,8 @@ import datetime
 from dataclasses import dataclass
 import rsa
 import os
+import events
+
 @dataclass
 class Member:
     username: str
@@ -63,7 +65,8 @@ class Server:
     __membersMutex: threading.Lock = threading.Lock()
     __handleClientsThread: threading.Thread = None
     logger: Logging = Logging()
-
+    eventBus: events.Events = events.Events(("onUserJoin","onUserLeave","onMessageSend"))
+        
     def __getUsername(self,sock,addr):
         try:
             return Messages.receiveMessage(sock,self.privateKey)
@@ -90,8 +93,9 @@ class Server:
 
             sock.send(b"__END__")
         except:
-            return None
             print(f"Error sending latest message to {username}")
+            return None
+            
         return "\0"
 
     def handleClients(self):
@@ -114,7 +118,7 @@ class Server:
             member = Member(username,sock,publicKey)            
 
             self.members.append(member)
-
+            self.eventBus.onUserJoin(member)
             handleThread = threading.Thread(target=self.handleMessages,args=(member,))
             handleThread.start()
             self.__membersMutex.release()
@@ -127,14 +131,13 @@ class Server:
                 message = Messages.receiveMessage(member.socket,self.privateKey)
             except:
                 print(f"Error getting message from {member.username}")
-                return self.members.remove(member)
+                return self.eventBus.onUserLeave(member)
                 
             message = Message(member,datetime.datetime.now(),message)
             if message.message=="QUIT":
-                return self.members.remove(member)
+                return self.eventBus.onUserLeave(member)
+            self.eventBus.onMessageSend(message)
 
-            self.broadcast(message)
-            self.logger.log(message)
 
     def broadcast(self,message:Message):
         for m in self.members:
@@ -142,20 +145,53 @@ class Server:
                 Messages.sendMessage(m.socket,message,m.openKey)
             except:
                 print(f"Error sending message to {m.username}")
-                
+    def broadcastString(self,message:str):
+        for m in self.members:
+            try:
+                Messages.sendString(m.socket,message,m.openKey)
+            except:
+                print(f"Error sending message to {m.username}") 
+    def onMessageSend(self,message:Message):
+            self.broadcast(message)
+            self.logger.log(message)
+
+    def onUserJoin(self,user:Member):
+        message = f"User {user.username} has joined the chat!"
+        self.broadcastString(message)
+        self.logger.log(message)
+
+    def onUserLeave(self,user:Member):
+        self.members.remove(user)
+        user.socket.close()
+        message = f"User {user.username} has left the chat!"
+        self.broadcastString(message)
+        self.logger.log(message)
+
 
     def start(self):
         self.members = []
         self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        
         self.socket.bind((self.host,self.port))
         self.socket.listen()
+
+        self.eventBus.onMessageSend += self.onMessageSend
+        self.eventBus.onUserJoin += self.onUserJoin
+        self.eventBus.onUserLeave += self.onUserLeave
+
         self.__handleClientsThread = threading.Thread(target=self.handleClients)
         self.__handleClientsThread.start()
 
 
+
     def stop(self):
-        self.socket.close(5)
+        self.socket.close()
         self.__handleClientsThread.stop()
+
+        self.eventBus.onMessageSend -= self.onMessageSend
+        self.eventBus.onUserJoin -= self.onUserJoin
+        self.eventBus.onUserLeave -= self.onUserLeave
+
         members=[]
 
 if os.path.exists("./public.pem") and os.path.exists("./private.pem"):
