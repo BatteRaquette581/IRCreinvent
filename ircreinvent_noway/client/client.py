@@ -1,10 +1,33 @@
+from pathlib import Path
+import sys
+import importlib
+def import_parents(level=2):
+    global __package__
+    file = Path(__file__).resolve()
+    parent, top = file.parent, file.parents[level]
+    
+    sys.path.append(str(top))
+    try:
+        sys.path.remove(str(parent))
+    except ValueError: # already removed
+        pass
+
+    __package__ = '.'.join(parent.parts[len(top.parts):])
+    importlib.import_module(__package__) # won't be needed after that
+
+
+if __name__ == '__main__' and __package__ is None:
+    import_parents()
 import socket
 import threading
 from atexit import register
 import os
-global running
+import time
+import datetime
+from ..src.messages import Messages
 import rsa
-running = True
+
+
 
 def clear_console():
 
@@ -17,26 +40,23 @@ def clear_console():
         case _:
             print("Unknown OS: " + os_name)
 
-def handleSending(sock,publicKey):
+def handleSending(sock,aesKey):
     while True:
         message=input()
-
+        Messages.sendMessage(sock,message,aesKey)
         if message == "QUIT": 
-            Messages.sendMessage(sock,message,publicKey)
-            sock.close()
-            os._exit(1)
-        Messages.sendMessage(sock,message,publicKey)
-def handleReceiving(sock,privateKey):
+            break
+
+    sock.close()
+    os._exit(1)
+def handleReceiving(sock,aesKey):
     while True:
-        message = Messages.receiveMessage(sock,privateKey)
+        message = Messages.receiveMessage(sock,aesKey)
+        if not message:
+            print("Lost connection to server... exiting")
+            os._exit()
         print(message)
 
-class Messages:
-    @staticmethod
-    def sendMessage(sock: socket.socket,message: str,public_key: rsa.PublicKey):
-        sock.send(rsa.encrypt(message.encode(),public_key))
-    def receiveMessage(sock:socket.socket, private_key: rsa.PrivateKey):
-        return rsa.decrypt(sock.recv(4096),private_key).decode()
 
 clear_console()
 
@@ -57,53 +77,27 @@ if not port: port = 22954
 us = input("Username: ")
 s.connect((ip, int(port)))
 
-if os.path.exists("public.pem") and os.path.exists("private.pem"):
-    print("Using existing keys")
-    with open("public.pem","rb") as f:
-        public = rsa.PublicKey.load_pkcs1(f.read())
-    with open("private.pem","rb") as f:
-        private = rsa.PrivateKey.load_pkcs1(f.read())
-else: 
-    print("Generating keys (This may take few minutes)...")
-    public,private = rsa.newkeys(4096+11)
-    print("Done!")
-    with open("public.pem","wb") as f:
-        f.write(public.save_pkcs1())
-    with open("private.pem","wb") as f:
-        f.write(private.save_pkcs1())
+public,private = rsa.newkeys(344)
 
-print(f"Public key:\n{public.save_pkcs1().decode()}\n")
 
-serverPublicKey = rsa.PublicKey.load_pkcs1(s.recv(4096+11))
-
-print(f"Server public key:\n{serverPublicKey.save_pkcs1().decode()}\n")
-
-Messages.sendMessage(s,us,serverPublicKey)
+#1 send public key to server
 s.send(public.save_pkcs1())
 
+#2 get aes key from server
+aesKey = Messages.receiveRSAMessage(s,private)
+#3 send username
+Messages.sendMessage(s,us,aesKey)
+
+
+
+#4 get latest messages
+messages = Messages.receiveMessage(s,aesKey).split("\0")
+for message in messages:
+    print(message)
+
 print("type QUIT to quit")
-currentChunk = b""
-latest = []
-buffer = b""
-while True:
-    currentChunk = s.recv(8192)
-    if currentChunk[-7:] == b"__END__": 
-        buffer += currentChunk[:-7]
-        break
-    buffer += currentChunk
 
-latest = buffer.split(b"__END_MSG__")
-latest = latest[:-1]
-for message in latest:
-    print(rsa.decrypt(message,private).decode())
-    
-
-    
-
-
-
-
-threading.Thread(target=handleReceiving,args=(s,private,)).start()
-threading.Thread(target=handleSending,args=(s,serverPublicKey,)).start()
+threading.Thread(target=handleReceiving,args=(s,aesKey,)).start()
+threading.Thread(target=handleSending,args=(s,aesKey,)).start()
 
 

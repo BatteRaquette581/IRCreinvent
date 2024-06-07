@@ -1,58 +1,38 @@
 import socket
 import threading
-import datetime
 from dataclasses import dataclass
 import rsa
 import os
 import events
+from Crypto import Random
+from Crypto.Cipher import AES
+from pathlib import Path
+import sys
+import importlib
+import time
+import datetime
+def import_parents(level=2):
+    global __package__
+    file = Path(__file__).resolve()
+    parent, top = file.parent, file.parents[level]
+    
+    sys.path.append(str(top))
+    try:
+        sys.path.remove(str(parent))
+    except ValueError: # already removed
+        pass
 
-@dataclass
-class Member:
-    username: str
-    socket: socket.socket
-    openKey: rsa.PublicKey
-@dataclass
-class Message:
-    sender:Member
-    sentAt: datetime.datetime
-    message:str 
-
-    def __str__(self):
-        return f"{self.sentAt.strftime("%H:%M:%S")} | {self.sender.username}: {self.message}"
+    __package__ = '.'.join(parent.parts[len(top.parts):])
+    importlib.import_module(__package__) # won't be needed after that
 
 
-class Messages:
-    @staticmethod
-    def sendMessage(sock: socket.socket,message: Message,public_key: rsa.PublicKey):
-        sock.send(rsa.encrypt(str(message).encode(),public_key))
-    @staticmethod
-    def receiveMessage(sock:socket.socket, private_key: rsa.PrivateKey,length=4096):
+if __name__ == '__main__' and __package__ is None:
+    import_parents() 
 
-        return rsa.decrypt(sock.recv(length),private_key).decode()
-    @staticmethod
-    def sendString(sock: socket.socket, message:str,public_key:rsa.PublicKey):
-        sock.send(rsa.encrypt(message.encode(),public_key))
-
-class Logging:
-    def __init__(self,path="./logs"):
-        self.path = path
-
-    def log(self,message:str):
-        print(message,file=open(f"{self.path}/log-{datetime.date.today().strftime("%d-%m-%Y")}.log","a"))
-
-    def getLatestMessages(self,n=30):
-        logfiles = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        messages = []
-        for file in logfiles:
-            if len(messages)>=n: break
-            messages.append(f"{file[4:-4]:-^30}") # file[4:-4]: log-01-23-4567.log -> 01-23-4567
-            with open(os.path.join(self.path, file),"r") as f:
-                line = "\0"
-                while line != "" and len(messages)<n:
-                    messages.append(line)
-                    line = f.readline()
-        return messages
-
+from ..src.message import Message
+from ..src.messages import Messages
+from ..src.logging import Logging
+from ..src.member import Member
                      
             
 
@@ -66,56 +46,81 @@ class Server:
     __handleClientsThread: threading.Thread = None
     logger: Logging = Logging()
     eventBus: events.Events = events.Events(("onUserJoin","onUserLeave","onMessageSend"))
+    running: bool = True
         
-    def __getUsername(self,sock,addr):
+    def __getUsername(self,sock,addr,aesKey):
         try:
-            return Messages.receiveMessage(sock,self.privateKey)
-        except:
+            return Messages.receiveMessage(sock,key=aesKey)
+        except Exception as e:
+            print(e)
             print(f"Error getting username from {addr[0]}")
             return None
 
-    def __getUserPublicKey(self,sock,username):
+    def __getUserPublicKey(self,sock,addr):
         try:
-            return rsa.PublicKey.load_pkcs1(sock.recv(4096+11))
+            return rsa.PublicKey.load_pkcs1(sock.recv(344))
             
         except:
-            print(f"Error getting public key from {username}")
+            print(f"Error getting public key from {addr[0]}")
             return None
 
-    def __sendLatestMessages(self,sock,publicKey,username):
-        latest = self.logger.getLatestMessages() 
-        try:
-            for message in latest:
-                
-                    Messages.sendString(sock,message,publicKey)
-                    # duct-tape: add \0 after each message
-                    sock.send(b"__END_MSG__")
+    def __sendLatestMessages(self,sock,aesKey,username):
+        latest = "\0".join(self.logger.getLatestMessages())
 
-            sock.send(b"__END__")
-        except:
-            print(f"Error sending latest message to {username}")
+        try:
+
+            Messages.sendMessage(sock,latest,aesKey)
+        except Exception as e:
+            print(e)
+            print(f"Error sending latest messages to {username}")
             return None
             
         return "\0"
+    
+    def __sendAESKey(self,sock,aesKey,publicKey,addr):
+        try:
+            Messages.sendRSAMessage(sock,aesKey,publicKey)
+            return True
+        except Exception as e:
+            print(e)
+            print(f"Error sending to {addr[0]}")
+            return None
+
+    def __memberHandshake(self,sock,addr):
+            aesKey = Random.new().read(32)
+
+            publicKey = self.__getUserPublicKey(sock,addr)
+            if not publicKey:
+                return (None,None)
+
+            successfully = self.__sendAESKey(sock,aesKey,publicKey,addr)
+            if not successfully:
+                return (None,None)
+
+            username = self.__getUsername(sock,addr,aesKey)
+
+            if not username:
+                return (None,None)
+
+            successfully = self.__sendLatestMessages(sock,aesKey,username)
+            if not successfully:
+                return (None,None)
+
+            return (username,aesKey)
 
     def handleClients(self):
-        while True:
+        while self.running:
             sock,addr = self.socket.accept()
-            sock.send(self.openKey.save_pkcs1())
 
-            username = self.__getUsername(sock,addr)
-            if not username:
-                continue
-            publicKey = self.__getUserPublicKey(sock,username)
-            if not publicKey:
-                continue
+            username,aesKey = self.__memberHandshake(sock,addr)
 
-            successfully = self.__sendLatestMessages(sock,publicKey,username)
-            if not successfully:
+            if not (username or aesKey):
+                sock.close()
                 continue
+            
 
             self.__membersMutex.acquire()
-            member = Member(username,sock,publicKey)            
+            member = Member(username,sock,aesKey)            
 
             self.members.append(member)
             self.eventBus.onUserJoin(member)
@@ -126,9 +131,9 @@ class Server:
 
     def handleMessages(self,member):
 
-        while True:
+        while self.running:
             try:
-                message = Messages.receiveMessage(member.socket,self.privateKey)
+                message = Messages.receiveMessage(member.socket,member.aesKey)
             except:
                 print(f"Error getting message from {member.username}")
                 return self.eventBus.onUserLeave(member)
@@ -142,36 +147,29 @@ class Server:
     def broadcast(self,message:Message):
         for m in self.members:
             try:
-                Messages.sendMessage(m.socket,message,m.openKey)
+                Messages.sendMessage(m.socket,message,m.aesKey)
             except:
                 print(f"Error sending message to {m.username}")
-    def broadcastString(self,message:str):
-        for m in self.members:
-            try:
-                Messages.sendString(m.socket,message,m.openKey)
-            except:
-                print(f"Error sending message to {m.username}") 
+    
     def onMessageSend(self,message:Message):
-            self.broadcast(message)
-            self.logger.log(message)
+        self.broadcast(message)
+        self.logger.log(message)
 
     def onUserJoin(self,user:Member):
-        message = f"User {user.username} has joined the chat!"
-        self.broadcastString(message)
-        self.logger.log(message)
+        self.eventBus.onMessageSend(f"User {user.username} has joined the chat!")
+
 
     def onUserLeave(self,user:Member):
         self.members.remove(user)
         user.socket.close()
-        message = f"User {user.username} has left the chat!"
-        self.broadcastString(message)
-        self.logger.log(message)
+        self.eventBus.onMessageSend(f"User {user.username} has left the chat!")
+
 
 
     def start(self):
         self.members = []
         self.socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        
+
         self.socket.bind((self.host,self.port))
         self.socket.listen()
 
@@ -185,30 +183,20 @@ class Server:
 
 
     def stop(self):
-        self.socket.close()
-        self.__handleClientsThread.stop()
-
+        self.socket.close() 
+        self.running = False
         self.eventBus.onMessageSend -= self.onMessageSend
         self.eventBus.onUserJoin -= self.onUserJoin
         self.eventBus.onUserLeave -= self.onUserLeave
 
         members=[]
-
-if os.path.exists("./public.pem") and os.path.exists("./private.pem"):
-    print("Using existing keys")
-    with open("./public.pem","rb") as f:
-        public = rsa.PublicKey.load_pkcs1(f.read())
-    with open("./private.pem","rb") as f:
-        private = rsa.PrivateKey.load_pkcs1(f.read())
-else: 
-    print("Generating keys (This may take few minutes)...")
-    public,private = rsa.newkeys(4096+11)
-    print("Done!")
-    with open("./public.pem","wb") as f:
-        f.write(public.save_pkcs1())
-    with open("./private.pem","wb") as f:
-        f.write(private.save_pkcs1())
-
-a = Server(openKey=public,privateKey=private)
-a.start()
-print("Server started!")
+while True:
+    try:
+        a = Server()
+        a.start()
+        print("Server started!")
+        break
+    except Exception as e:
+        print(e)
+        print("Retrying in a second...")
+        time.sleep(1)

@@ -1,2 +1,4 @@
 *.log
 *.pem
+*.pyc
+__pycache__
