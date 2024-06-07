@@ -23,6 +23,8 @@ jobs:
           python-version: "3.x"
           architecture: "x64"
 
+      - run: python3 -m pip install setuptools wheel
+
       - run: python3 -m pip install -r requirements.txt
       
       - uses: Nuitka/Nuitka-Action@main
