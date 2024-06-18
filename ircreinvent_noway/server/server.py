@@ -1,16 +1,21 @@
+
 import socket
 import threading
 from dataclasses import dataclass
-import rsa
-import os
-import events
-from Crypto import Random
-from Crypto.Cipher import AES
 from pathlib import Path
 import sys
 import importlib
 import time
 import datetime
+import events
+import rsa
+from Crypto import Random
+
+from src.message import Message
+from src.messages import Messages
+from src.logging import Logging
+from.src.member import Member
+
 def import_parents(level=2):
     global __package__
     file = Path(__file__).resolve()
@@ -29,10 +34,7 @@ def import_parents(level=2):
 if __name__ == '__main__' and __package__ is None:
     import_parents() 
 
-from ..src.message import Message
-from ..src.messages import Messages
-from ..src.logging import Logging
-from ..src.member import Member
+
                      
             
 
@@ -87,26 +89,26 @@ class Server:
             return None
 
     def __memberHandshake(self,sock,addr):
-            aesKey = Random.new().read(32)
+        aesKey = Random.new().read(32)
 
-            publicKey = self.__getUserPublicKey(sock,addr)
-            if not publicKey:
-                return (None,None)
+        publicKey = self.__getUserPublicKey(sock,addr)
+        if not publicKey:
+            return (None,None)
 
-            successfully = self.__sendAESKey(sock,aesKey,publicKey,addr)
-            if not successfully:
-                return (None,None)
+        successfully = self.__sendAESKey(sock,aesKey,publicKey,addr)
+        if not successfully:
+            return (None,None)
 
-            username = self.__getUsername(sock,addr,aesKey)
+        username = self.__getUsername(sock,addr,aesKey)
 
-            if not username:
-                return (None,None)
+        if not username:
+            return (None,None)
 
-            successfully = self.__sendLatestMessages(sock,aesKey,username)
-            if not successfully:
-                return (None,None)
+        successfully = self.__sendLatestMessages(sock,aesKey,username)
+        if not successfully:
+            return (None,None)
 
-            return (username,aesKey)
+        return (username,aesKey)
 
     def handleClients(self):
         while self.running:
