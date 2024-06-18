@@ -1,4 +1,4 @@
-from .api import commands
+from .api import commands, registered_events, EventType
 
 # this is only done to trigger the registering of the commands, but not to actually import them.
 # python will not run the file if the file isn't referenced, so they're referenced here

@@ -96,6 +96,7 @@ messages = Messages.receiveMessage(s,aesKey).split("\0")
 for message in messages:
     print(message)
 
+print("Enter /help to a get a list of commands.")
 print("Enter /quit to quit.")
 
 threading.Thread(target=handleReceiving,args=(s,aesKey,)).start()

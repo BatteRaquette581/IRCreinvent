@@ -159,6 +159,13 @@ class Server:
         except:
             print(f"Error sending message to {member.username}")
     
+
+    def handle_command_return_type(self, command_return, member: Member):
+        if command_return.private_message != None:
+            self.send_private_message(command_return.private_message, member)
+        if command_return.broadcast != None:
+            self.broadcast(command_return.broadcast)
+    
     def onMessageSend(self, message:Message, member: Member):
         if message.message.startswith("/"):
             self.logger.log(f"{member.username} entered the following command: {message}")
@@ -178,12 +185,8 @@ class Server:
                 return
             try:
                 result = commands[command_name](member, args)
-                print(result)
                 self.logger.log(f"Server privately responded to {member.username} with {result.private_message}")
-                if result.private_message != None:
-                    self.send_private_message(result.private_message, member)
-                if result.broadcast != None:
-                    self.broadcast(result.broadcast, member)
+                self.handle_command_return_type(result, member)
             except Exception as exception:
                 self.send_private_message("An error occured while processing the command.", member)
                 print("***********************")
@@ -196,9 +199,15 @@ class Server:
         self.broadcast(message)
         self.logger.log(message)
 
+        for func in registered_events[EventType.onMessageSend]:
+            self.handle_command_return_type(func(member, message), member)
+
     def onUserJoin(self,user:Member):
         # note: see src/message.py:11 for info on why sender is None
         self.eventBus.onMessageSend(Message(None, datetime.datetime.now(), f"User {user.username} has joined the chat!"), user)
+
+        for func in registered_events[EventType.onUserJoin]:
+            self.handle_command_return_type(func(user), user)
 
 
     def onUserLeave(self,user:Member):
@@ -206,6 +215,9 @@ class Server:
         self.members.remove(user)
         user.socket.close()
         self.eventBus.onMessageSend(Message(None, datetime.datetime.now(), f"User {user.username} has left the chat!"), user)
+
+        for func in registered_events[EventType.onUserLeave]:
+            self.handle_command_return_type(func(user), user)
 
 
 
