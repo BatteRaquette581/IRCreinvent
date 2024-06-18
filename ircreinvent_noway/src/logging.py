@@ -1,5 +1,6 @@
 import datetime
 import os
+from .message import Message
 class Logging:
     def __init__(self,path="./logs",dateSeparatorLength=30):
         self.path = path
@@ -7,8 +8,8 @@ class Logging:
             os.mkdir(path)
         self.dateSeparatorLength = dateSeparatorLength
 
-    def log(self,message:str):
-        print(message,file=open(f"{self.path}/log-{datetime.date.today().strftime("%d-%m-%Y")}.log","a"))
+    def log(self,message:str | Message):
+        print(str(message),file=open(f"{self.path}/log-{datetime.date.today().strftime("%d-%m-%Y")}.log","a"))
 
     def getLatestMessages(self,n=30):
         logfiles = self.__getLogFiles()
