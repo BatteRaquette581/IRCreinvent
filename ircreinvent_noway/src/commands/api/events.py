@@ -10,5 +10,4 @@ registered_events: dict[EventType, list[Callable]] = {
 }
 
 def register_event(event_type: EventType, func: Callable) -> None:
-    print(event_type, func)
     registered_events[event_type].append(func)

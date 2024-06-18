@@ -178,8 +178,6 @@ class Server:
                 args = command_structure[1:]
             else:
                 args = []
-            print("COMMAND TEST:",command_name, args)
-            print(commands, commands.keys())
             if command_name not in commands.keys():
                 self.send_private_message(f"Unknown command: /{command_name}", member)
                 return
