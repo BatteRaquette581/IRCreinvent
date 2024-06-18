@@ -11,10 +11,7 @@ import events
 import rsa
 from Crypto import Random
 
-from src.message import Message
-from src.messages import Messages
-from src.logging import Logging
-from.src.member import Member
+
 
 def import_parents(level=2):
     global __package__
@@ -34,7 +31,13 @@ def import_parents(level=2):
 if __name__ == '__main__' and __package__ is None:
     import_parents() 
 
-
+from ..src.message import Message
+from ..src.messages import Messages
+from ..src.logging import Logging
+from ..src.member import Member
+from ..src.messageTypes import MessageTypes
+from ..src.commands import Commands
+from ..src.commandRegistry import CommandNotFoundError
                      
             
 
@@ -48,6 +51,7 @@ class Server:
     __handleClientsThread: threading.Thread = None
     logger: Logging = Logging()
     eventBus: events.Events = events.Events(("onUserJoin","onUserLeave","onMessageSend"))
+    commands:Commands = Commands()
     running: bool = True
         
     def __getUsername(self,sock,addr,aesKey):
@@ -141,30 +145,48 @@ class Server:
                 return self.eventBus.onUserLeave(member)
                 
             message = Message(member,datetime.datetime.now(),message)
-            if message.message=="QUIT":
-                return self.eventBus.onUserLeave(member)
-            self.eventBus.onMessageSend(message)
+            
+            if self.commands.isCommand(message.message):
+                context = {"server":self,"sender":member}
+                try:
+                    result = self.commands.execute(message.message,context)
+                    if result:
+                        self.onMessageSend(**result)
+                except CommandNotFoundError as e:
+                    self.onMessageSend(str(e),MessageTypes.Private,recepient=member)
+
+                continue
+
+            self.eventBus.onMessageSend(message,MessageTypes.Broadcast)
 
 
-    def broadcast(self,message:Message):
+    def broadcast(self,message:Message | str):
         for m in self.members:
             try:
                 Messages.sendMessage(m.socket,message,m.aesKey)
             except:
                 print(f"Error sending message to {m.username}")
-    
-    def onMessageSend(self,message:Message):
-        self.broadcast(message)
-        self.logger.log(message)
+            
+    def onMessageSend(self,message:Message | str,type:int,**kwargs):
+        match type:
+            case MessageTypes.Broadcast:
+                self.broadcast(message)
+                self.logger.log(message)
+
+            case MessageTypes.Private:
+                if not "recepient" in kwargs:
+                    raise TypeError("Private message must have a recepient")
+                Messages.sendMessage(kwargs["recepient"].socket,message,kwargs["recepient"].aesKey)
+                return
 
     def onUserJoin(self,user:Member):
-        self.eventBus.onMessageSend(f"User {user.username} has joined the chat!")
+        self.eventBus.onMessageSend(f"User {user.username} has joined the chat!",MessageTypes.Broadcast)
 
 
     def onUserLeave(self,user:Member):
         self.members.remove(user)
         user.socket.close()
-        self.eventBus.onMessageSend(f"User {user.username} has left the chat!")
+        self.eventBus.onMessageSend(f"User {user.username} has left the chat!",MessageTypes.Broadcast)
 
 
 
@@ -192,9 +214,12 @@ class Server:
         self.eventBus.onUserLeave -= self.onUserLeave
 
         members=[]
+
+commands = Commands()
+# here you need to register the builtin commands
 while True:
     try:
-        a = Server()
+        a = Server(commands=commands)
         a.start()
         print("Server started!")
         break
