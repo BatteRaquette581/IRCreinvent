@@ -1,5 +1,5 @@
 from ....src.member import Member
-from ..api import register_command, CommandReturnType
+from ..api import registerCommand, CommandReturnType, StandardCommandReturnType
 from ....src.messages import Messages
 
 from typing import Iterable
@@ -11,6 +11,6 @@ def ping(member: Member, arguments: Iterable[str]) -> CommandReturnType:
     t2 = perf_counter()
     time_taken_ms = (t2 - t1) * 1000
     lines = ["*******************", "Pong!", f"Ping/latency: {time_taken_ms}ms", "*******************"]
-    return CommandReturnType(private_message = "\n".join(lines))
+    return StandardCommandReturnType(privateMessage = "\n".join(lines))
 
-register_command(ping, name = "ping", description = "Measures your latency.")
+registerCommand(ping, name = "ping", description = "Measures your latency.")

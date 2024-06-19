@@ -1,7 +1,7 @@
 from ....src.member import Member
-from ..api import register_event, CommandReturnType, EventType
+from ..api import registerEvent, CommandReturnType, StandardCommandReturnType, EventType
 
-def welcome_user(user: Member) -> CommandReturnType:
-    return CommandReturnType(broadcast = f"Please welcome {user.username}!")
+def welcomeUser(user: Member) -> CommandReturnType:
+    return StandardCommandReturnType(broadcast = f"Please welcome {user.username}!")
 
-register_event(EventType.onUserJoin, welcome_user)
+registerEvent(EventType.onUserJoin, welcomeUser)

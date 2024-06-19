@@ -1,3 +1,3 @@
-from .command import register_command, commands
-from .commandreturntype import CommandReturnType
-from .events import registered_events, EventType, register_event
+from .command import registerCommand, commands
+from .commandreturntype import CommandReturnType, StandardCommandReturnType, DictCommandReturnType, DictCommandReturnMessageType, getBroadcast, getPrivateMessage
+from .events import registeredEvents, EventType, registerEvent
