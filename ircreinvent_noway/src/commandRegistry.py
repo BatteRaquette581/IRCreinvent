@@ -9,7 +9,7 @@ class CommandRegistry:
         self.__registry = {}
     
     def addCommand(self,name:str,command:Command):
-        self.__registry[name] = Command
+        self.__registry[name] = command
     
     def getCommand(self,name:str) -> Command:
         try:

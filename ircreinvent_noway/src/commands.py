@@ -30,6 +30,6 @@ class Commands:
             "commandRegistry":self.__commandRegistry
             })
         name,params = self.__commandParser.parseCommand(string)
-        return self.__commandRegistry.getCommand(name).execute(params,**context)
+        return self.__commandRegistry.getCommand(name).execute(args=params,context=context)
 
 

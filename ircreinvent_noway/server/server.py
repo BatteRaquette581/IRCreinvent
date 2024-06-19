@@ -38,7 +38,7 @@ from ..src.member import Member
 from ..src.messageTypes import MessageTypes
 from ..src.commands import Commands
 from ..src.commandRegistry import CommandNotFoundError
-                     
+from ..src.command import Command                 
             
 
 @dataclass
@@ -147,7 +147,7 @@ class Server:
             message = Message(member,datetime.datetime.now(),message)
             
             if self.commands.isCommand(message.message):
-                context = {"server":self,"sender":member}
+                context = {"sender":member} # "eventBus":self.eventBus,
                 try:
                     result = self.commands.execute(message.message,context)
                     if result:
