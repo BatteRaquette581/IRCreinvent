@@ -33,6 +33,7 @@ from ..src.message import Message
 from ..src.messages import Messages
 from ..src.logging import Logging
 from ..src.member import Member
+from ..src.commands import *
                      
             
 
@@ -139,9 +140,10 @@ class Server:
                 return self.eventBus.onUserLeave(member)
                 
             message = Message(member,datetime.datetime.now(),message)
-            if message.message=="QUIT":
+            if message.message.lower().startswith("/quit"):
+                # weird pseudo-command, still makes more sense imo to make it command like, may prevent mishaps and confusion
                 return self.eventBus.onUserLeave(member)
-            self.eventBus.onMessageSend(message)
+            self.eventBus.onMessageSend(message, member)
 
 
     def broadcast(self,message:Message):
@@ -151,18 +153,71 @@ class Server:
             except:
                 print(f"Error sending message to {m.username}")
     
-    def onMessageSend(self,message:Message):
+    def sendPrivateMessage(self, message: Message, member: Member):
+        try:
+            Messages.sendMessage(member.socket, message, member.aesKey)
+        except:
+            print(f"Error sending message to {member.username}")
+    
+
+    def handleCommandReturnType(self, commandReturn, member: Member):
+        pm: str = getPrivateMessage(commandReturn)
+        broadcast: str = getBroadcast(commandReturn)
+        if pm != None:
+            self.sendPrivateMessage(pm, member)
+        if broadcast != None:
+            self.broadcast(broadcast)
+    
+    def onMessageSend(self, message:Message, member: Member):
+        if message.message.startswith("/"):
+            self.logger.log(f"{member.username} entered the following command: {message}")
+            commandStructure = message.message.removeprefix("/").split()
+            if len(commandStructure) == 0:
+                self.send_private_message(f"Please enter a command name.", member)
+                return
+            commandName = commandStructure[0]
+            if len(commandStructure) >= 2:
+                args = commandStructure[1:]
+            else:
+                args = []
+            if commandName not in commands.keys():
+                self.sendPrivateMessage(f"Unknown command: /{commandName}", member)
+                return
+            try:
+                result = commands[commandName](member, args)
+                self.logger.log(f"Server privately responded to {member.username} with {getPrivateMessage(result)}")
+                self.handleCommandReturnType(result, member)
+            except Exception as exception:
+                self.sendPrivateMessage("An error occured while processing the command.", member)
+                print("***********************")
+                print(f"Exception caused by {member.username} launching the command: {message}")
+                print()
+                print(exception)
+                print("***********************")
+            return
+            
         self.broadcast(message)
         self.logger.log(message)
 
+        for func in registeredEvents[EventType.onMessageSend]:
+            self.handleCommandReturnType(func(member, message), member)
+
     def onUserJoin(self,user:Member):
-        self.eventBus.onMessageSend(f"User {user.username} has joined the chat!")
+        # note: see src/message.py:11 for info on why sender is None
+        self.eventBus.onMessageSend(Message(None, datetime.datetime.now(), f"User {user.username} has joined the chat!"), user)
+
+        for func in registeredEvents[EventType.onUserJoin]:
+            self.handleCommandReturnType(func(user), user)
 
 
     def onUserLeave(self,user:Member):
+        # note: see src/message.py:11 for info on why sender is None
         self.members.remove(user)
         user.socket.close()
-        self.eventBus.onMessageSend(f"User {user.username} has left the chat!")
+        self.eventBus.onMessageSend(Message(None, datetime.datetime.now(), f"User {user.username} has left the chat!"), user)
+
+        for func in registeredEvents[EventType.onUserLeave]:
+            self.handleCommandReturnType(func(user), user)
 
 
 
@@ -194,7 +249,7 @@ while True:
     try:
         a = Server()
         a.start()
-        print("Server started!")
+        print(f"Server started on {a.host}:{a.port}!")
         break
     except Exception as e:
         print(e)

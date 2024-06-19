@@ -44,7 +44,8 @@ def handleSending(sock,aesKey):
     while True:
         message=input()
         Messages.sendMessage(sock,message,aesKey)
-        if message == "QUIT": 
+        if message.lower().startswith("/quit"): 
+            # pseudo-command stuff, see the server function which handles the message for more info
             break
 
     sock.close()
@@ -95,7 +96,8 @@ messages = Messages.receiveMessage(s,aesKey).split("\0")
 for message in messages:
     print(message)
 
-print("type QUIT to quit")
+print("Enter /help to a get a list of commands.")
+print("Enter /quit to quit.")
 
 threading.Thread(target=handleReceiving,args=(s,aesKey,)).start()
 threading.Thread(target=handleSending,args=(s,aesKey,)).start()

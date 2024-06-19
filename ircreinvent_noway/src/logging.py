@@ -8,7 +8,7 @@ class Logging:
         self.dateSeparatorLength = dateSeparatorLength
 
     def log(self,message:str):
-        print(message,file=open(f"{self.path}/log-{datetime.date.today().strftime("%d-%m-%Y")}.log","a"))
+        print(message,file=open(f'{self.path}/log-{datetime.date.today().strftime("%d-%m-%Y")}.log',"a"))
 
     def getLatestMessages(self,n=30):
         logfiles = self.__getLogFiles()
