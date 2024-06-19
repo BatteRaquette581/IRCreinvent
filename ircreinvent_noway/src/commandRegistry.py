@@ -3,13 +3,13 @@ class CommandNotFoundError(Exception):
     pass
 
 class CommandRegistry:
-    __registry: dict
+    __registry: dict[str, Command]
 
     def __init__(self):
         self.__registry = {}
     
     def addCommand(self,name:str,command:Command):
-        self.__registry[name] = Command
+        self.__registry[name] = command
     
     def getCommand(self,name:str) -> Command:
         try:

@@ -4,9 +4,10 @@ class Command:
     __command: callable
 
     def execute(self,*args,**context):
+        print(type(self))
         if len(args) != len(list(self.__command.__code__.co_varnames)):
             return {
-                "message":f"Missing parameter(s): {", ".join(self.__command.__code__.co_varnames)}",
+                "message":f'Missing parameter(s): {", ".join(self.__command.__code__.co_varnames)}',
                 "type":MessageTypes.Private,
                 "recepient":context["sender"]
             }

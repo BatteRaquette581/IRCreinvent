@@ -36,7 +36,9 @@ from ..src.messages import Messages
 from ..src.logging import Logging
 from ..src.member import Member
 from ..src.messageTypes import MessageTypes
+from ..src.command import Command
 from ..src.commands import Commands
+from ..src.custom_commands import HelpCommand
 from ..src.commandRegistry import CommandNotFoundError
                      
             
@@ -215,7 +217,8 @@ class Server:
 
         members=[]
 
-commands = Commands()
+commands: Commands = Commands()
+commands.add("help", HelpCommand)
 # here you need to register the builtin commands
 while True:
     try:

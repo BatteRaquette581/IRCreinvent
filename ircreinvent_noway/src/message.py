@@ -8,4 +8,4 @@ class Message:
     message:str 
 
     def __str__(self):
-        return f"{self.sentAt.strftime("%H:%M:%S")} | {self.sender.username}: {self.message}"
+        return f'{self.sentAt.strftime("%H:%M:%S")} | {self.sender.username}: {self.message}'
